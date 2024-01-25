@@ -1,22 +1,39 @@
 import pyserini as ps #idk if this works bc im on my local machine
+from pyserini.index import IndexWriter, SimpleIndexer
+from pyserini.search import SimpleSearcher
+import numpy as np
+import json
+import sys
+from pathlib import Path
+import tempfile
+import os
+import more_itertools
+from warnings import warn
+from typing import Optional, Union, List
+from enum import Enum
+from collections import Counter
+import functools
+import ir_datasets
+from . import _pisathon
+from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
 
 class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called and replace with ps.LuceneIndexer (equivalent)
   def __init__(self,
-      path: str,
+      index_dir: str,
       text_field: str = None,
       stemmer: Optional[Union[PisaStemmer, str]] = None,
       index_encoding: Optional[Union[PisaIndexEncoding, str]] = None,
-      batch_size: int = 100_000,
+      #batch_size: int = 100_000,
       stops: Optional[Union[PisaStopwords, List[str]]] = None,
       threads: int = 8,
       overwrite=False):
-    self.path = path
-    ppath = Path(path)
+    self.index_dir = index_dir
+    ppath = Path(index_dir)
     if stemmer is not None: stemmer = PisaStemmer(stemmer)
     if index_encoding is not None: index_encoding = PisaIndexEncoding(index_encoding)
     if stops is not None and not isinstance(stops, list): stops = PisaStopwords(stops)
-    if (ppath/'pt_pisa_config.json').exists():
-      with (ppath/'pt_pisa_config.json').open('rt') as fin:
+    if (ppath/'ps_pisa_config.json').exists(): #TODO:write ps_pisa_config.json
+      with (ppath/'ps_pisa_config.json').open('rt') as fin:
         config = json.load(fin)
       if stemmer is None:
         stemmer = PisaStemmer(config['stemmer'])
@@ -28,7 +45,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
     self.text_field = text_field
     self.stemmer = stemmer
     self.index_encoding = index_encoding
-    self.batch_size = batch_size
+    #self.batch_size = batch_size
     self.threads = threads
     self.overwrite = overwrite
     self.stops = stops
@@ -37,9 +54,26 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
     raise RuntimeError(f'You cannot use {self} itself as a transformer. Did you mean to call a ranking function like .bm25()?')
 
   def built(self):
-    return (Path(self.path)/'pt_pisa_config.json').exists()
+    return (Path(self.index_dir)/'ps_pisa_config.json').exists()
 
   def index(self, it):
+    it = more_itertools.peekable(it)
+    first_doc = it.peek()
+    text_field = self.text_field
+    if text_field is None: # infer the text field
+      dict_field = [k for k, v in sorted(first_doc.items()) if k.endswith('toks') and isinstance(v, dict)]
+      if dict_field:
+        text_field = dict_field[0]
+        warn(f'text_field not specified; using pre-tokenized field {repr(text_field)}')
+      else:
+        text_field = [k for k, v in sorted(first_doc.items()) if isinstance(v, str) and k != 'docno']
+        assert len(text_field) >= 1, f"no str or toks fields found in document. Fields: {k: type(v) for k, v in first_doc.items()}"
+        warn(f'text_field not specified; indexing all str fields: {text_field}')
+
+    mode = PisaIndexingMode.overwrite if self.overwrite else PisaIndexingMode.create
+
+    if isinstance(text_field, str) and isinstance(first_doc[text_field], dict):
+      return self.toks_indexer(text_field, mode=mode).index(it)
     return self.indexer(text_field, mode=mode).index(it)
 
   def bm25(self, k1=0.9, b=0.4, num_results=1000, verbose=False, threads=None, query_algorithm=None, query_weighted=None, toks_scale=100.):
@@ -71,50 +105,11 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
   def __repr__(self):
     return f'PisaIndex({repr(self.path)})'
 
-  @staticmethod
-  def from_dataset(dataset: Union[str, Dataset], variant: str = 'pisa_porter2', version: str = 'latest', **kwargs):
-    from pyterrier.batchretrieve import _from_dataset
-    return _from_dataset(dataset, variant=variant, version=version, clz=PisaIndex, **kwargs)
-
-  @staticmethod
-  def from_ciff(ciff_file: str, index_path, overwrite: bool = False, stemmer = PISA_INDEX_DEFAULTS['stemmer']):
-    import pyciff
-    stemmer = PisaStemmer(stemmer)
-    warn(f"Using stemmer {stemmer}, which may not match the stemmer used to construct {ciff_file}. You may need to instead pass stemmer='none' and perform the stemming in a pipeline to match the behaviour.")
-    if os.path.exists(index_path) and not overwrite:
-      raise FileExistsError(f'An index already exists at {index_path}')
-    ppath = Path(index_path)
-    ppath.mkdir(parents=True, exist_ok=True)
-    pyciff.ciff_to_pisa(ciff_file, str(ppath/'inv'))
-    # Move the files around a bit to where they are typically located
-    (ppath/'inv.documents').rename(ppath/'fwd.documents')
-    (ppath/'inv.terms').rename(ppath/'fwd.terms')
-    # The current version of pyciff does not create a termlex file, but a future version might
-    if (ppath/'inv.termlex').exists():
-      (ppath/'inv.termlex').rename(ppath/'fwd.termlex')
-    else:
-      # If it wasn't created, create one from the terms file
-      _pisathon.build_binlex(str(ppath/'fwd.terms'), str(ppath/'fwd.termlex'))
-    # The current version of pyciff does not create a doclex file, but a future version might
-    if (ppath/'inv.doclex').exists():
-      (ppath/'inv.doclex').rename(ppath/'fwd.doclex')
-    else:
-      # If it wasn't created, create one from the documents file
-      _pisathon.build_binlex(str(ppath/'fwd.documents'), str(ppath/'fwd.doclex'))
-    with open(ppath/'pt_pisa_config.json', 'wt') as fout:
-      json.dump({
-        'stemmer': stemmer.value,
-      }, fout)
-    return PisaIndex(index_path, stemmer=stemmer)
-
-  def to_ciff(self, ciff_file: str, description: str = 'from pyterrier_pisa'):
-    assert self.built()
-    import pyciff
-    pyciff.pisa_to_ciff(str(Path(self.path)/'inv'), str(Path(self.path)/'fwd.terms'), str(Path(self.path)/'fwd.documents'), ciff_file, description)
+# deleted to_ciff, from_ciff, from_dataset
 
   def get_corpus_iter(self, field='toks', verbose=True):
     assert self.built()
-    ppath = Path(self.path)
+    ppath = Path(self.index_dir)
     assert (ppath/'fwd').exists(), "get_corpus_iter requires a fwd index"
     m = np.memmap(ppath/'fwd', mode='r', dtype=np.uint32)
     lexicon = [l.strip() for l in (ppath/'fwd.terms').open('rt')]
@@ -129,9 +124,9 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       idx = end
 
   def indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None):
-    return PisaIndexer(self.path, text_field or self.text_field or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads, batch_size=batch_size or self.batch_size)
+    return PisaIndexer(self.path, text_field or self.text_field or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads)
 
   def toks_indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None, scale=100.):
     if PisaStemmer(self.stemmer) != PisaStemmer.none:
       raise ValueError("To index from dicts, you must set stemmer='none'")
-    return PisaToksIndexer(self.path, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, batch_size=self.batch_size, scale=scale)
+    return PisaToksIndexer(self.path, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, scale=scale)
