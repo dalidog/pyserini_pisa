@@ -1,4 +1,6 @@
-class PisaIndex(pt.Indexer):
+import pyserini as ps #idk if this works bc im on my local machine
+
+class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called and replace with ps.LuceneIndexer (equivalent)
   def __init__(self,
       path: str,
       text_field: str = None,
