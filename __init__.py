@@ -21,12 +21,15 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
   def __init__(self,
       index_dir: str,
       text_field: str = None,
-      stemmer: Optional[Union[PisaStemmer, str]] = None,
-      index_encoding: Optional[Union[PisaIndexEncoding, str]] = None,
+      stemmer: Optional[Union[PisaStemmer, str]] = None, #couldn't find it in the code but ChatGPT says pyserini supports stemming
+      #index_encoding: Optional[Union[PisaIndexEncoding, str]] = None,
       #batch_size: int = 100_000,
-      stops: Optional[Union[PisaStopwords, List[str]]] = None,
+      #stops: Optional[Union[PisaStopwords, List[str]]] = None,
       threads: int = 8,
-      overwrite=False):
+      #overwrite=False,
+      storePositions = False,
+      storeDocVectors = False,
+      storeRaw = False):
     self.index_dir = index_dir
     ppath = Path(index_dir)
     if stemmer is not None: stemmer = PisaStemmer(stemmer)

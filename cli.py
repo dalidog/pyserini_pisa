@@ -1,6 +1,6 @@
 def main_index(args):
-  dataset = pt.get_dataset(args.dataset)
-  index = PisaIndex(args.index_path, args.fields, threads=args.threads, batch_size=args.batch_size)
+  #dataset = pt.get_dataset(args.dataset)
+  index = PisaIndex(args.index_path, args.fields, threads=args.threads)
   docs = dataset.get_corpus_iter(verbose=False)
   total = None
   if hasattr(dataset, 'irds_ref'):
