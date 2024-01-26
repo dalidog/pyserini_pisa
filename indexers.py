@@ -57,6 +57,8 @@ class PisaIndexer(ps.LuceneIndexer):
       threading.Thread(target=self._write_fifo, args=(it, fifo, self.text_field), daemon=True).start()
       _pisathon.index(fifo, str(self.path), '' if self.stemmer == pyterrier_pisa.PisaStemmer.none else self.stemmer.value, self.batch_size, self.threads)
 
+  # line 58 should be?: _pisathon.index(fifo, str(self.path), '' if self.stemmer == pyserini_pisa.PisaStemmer.none else self.stemmer.value, self.batch_size, self.threads)
+  
   def _write_fifo(self, it, fifo, text_field):
     with open(fifo, 'wt') as fout:
       if isinstance(text_field, str):
