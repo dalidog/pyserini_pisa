@@ -23,7 +23,7 @@ class PisaIndexingMode(Enum):
   # append?
 
 class PisaIndexer(ps.LuceneIndexer):
-  def __init__(self, path, text_field='text', mode=PisaIndexingMode.create, stemmer='porter2', threads=1, batch_size=100_000):
+  def __init__(self, path, text_field='text', mode=PisaIndexingMode.create, stemmer='porter2', threads=1, batch_size=100_000): #TODO: Change this
     self.path = path
     self.text_field = text_field
     self.mode = PisaIndexingMode(mode)
@@ -44,18 +44,18 @@ class PisaIndexer(ps.LuceneIndexer):
 
     self._index(it)
 
-    with open(path/'pt_pisa_config.json', 'wt') as fout:
+    with open(path/'ps_pisa_config.json', 'wt') as fout:
       json.dump({
         'stemmer': self.stemmer.value,
       }, fout)
-    return pyterrier_pisa.PisaIndex(self.path, batch_size=self.batch_size, stemmer=self.stemmer, text_field=self.text_field, threads=self.threads)
+    return pyserini_pisa.PisaIndex(self.path, batch_size=self.batch_size, stemmer=self.stemmer, text_field=self.text_field, threads=self.threads)
 
   def _index(self, it):
     with tempfile.TemporaryDirectory() as d:
       fifo = os.path.join(d, 'fifo')
       os.mkfifo(fifo)
       threading.Thread(target=self._write_fifo, args=(it, fifo, self.text_field), daemon=True).start()
-      _pisathon.index(fifo, str(self.path), '' if self.stemmer == pyterrier_pisa.PisaStemmer.none else self.stemmer.value, self.batch_size, self.threads)
+      _pisathon.index(fifo, str(self.path), '' if self.stemmer == pyserini_pisa.PisaStemmer.none else self.stemmer.value, self.batch_size, self.threads)
 
   def _write_fifo(self, it, fifo, text_field):
     with open(fifo, 'wt') as fout:
@@ -69,7 +69,7 @@ class PisaIndexer(ps.LuceneIndexer):
 
 class PisaToksIndexer(PisaIndexer):
   def __init__(self, path, text_field='toks', mode=PisaIndexingMode.create, threads=1, batch_size=100_000, scale=100.):
-    super().__init__(path, text_field, mode, pyterrier_pisa.PisaStemmer.none, threads, batch_size=batch_size)
+    super().__init__(path, text_field, mode, pyserini_pisa.PisaStemmer.none, threads, batch_size=batch_size)
     self.scale = float(scale)
     assert self.scale > 0
 

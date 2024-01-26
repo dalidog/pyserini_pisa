@@ -23,7 +23,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       text_field: str = None,
       stemmer: Optional[Union[PisaStemmer, str]] = None, #couldn't find it in the code but ChatGPT says pyserini supports stemming
       #index_encoding: Optional[Union[PisaIndexEncoding, str]] = None,
-      #batch_size: int = 100_000,
+      batch_size: int = 100_000,
       #stops: Optional[Union[PisaStopwords, List[str]]] = None,
       threads: int = 8,
       #overwrite=False,
@@ -48,13 +48,10 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
     self.text_field = text_field
     self.stemmer = stemmer
     self.index_encoding = index_encoding
-    #self.batch_size = batch_size
+    self.batch_size = batch_size
     self.threads = threads
-    self.overwrite = overwrite
+    #self.overwrite = overwrite
     self.stops = stops
-
-  def transform(self, *args, **kwargs):
-    raise RuntimeError(f'You cannot use {self} itself as a transformer. Did you mean to call a ranking function like .bm25()?')
 
   def built(self):
     return (Path(self.index_dir)/'ps_pisa_config.json').exists()
@@ -127,9 +124,9 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       idx = end
 
   def indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None):
-    return PisaIndexer(self.path, text_field or self.text_field or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads)
+    return PisaIndexer(self.index_dir, text_field or self.text_field or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads)
 
   def toks_indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None, scale=100.):
     if PisaStemmer(self.stemmer) != PisaStemmer.none:
       raise ValueError("To index from dicts, you must set stemmer='none'")
-    return PisaToksIndexer(self.path, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, scale=scale)
+    return PisaToksIndexer(self.index_dir, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, scale=scale)
