@@ -147,6 +147,9 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
   
 
 class PisaRetrieve(pt.Transformer):
+  # not sure but I didn't see there is a base class for all transformers in pyserini
+  # like pt.Transformer
+  # can we just ignore this transformer class?  
   def __init__(self, index: Union[PisaIndex, str], scorer: Union[PisaScorer, str], num_results: int = 1000, threads=None, verbose=False, stops=None, query_algorithm=None, query_weighted=None, toks_scale=100., **retr_args):
     if isinstance(index, PisaIndex):
       self.index = index
