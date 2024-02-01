@@ -1,5 +1,6 @@
 def main_index(args):
   #dataset = pt.get_dataset(args.dataset)
+  # TODO: convert args.collection from JSON into plain text
   index = PisaIndex(args.index_path, args.fields, threads=args.threads)
   docs = dataset.get_corpus_iter(verbose=False)
   total = None

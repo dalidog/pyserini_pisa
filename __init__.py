@@ -20,20 +20,39 @@ from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
 class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called and replace with ps.LuceneIndexer (equivalent)
   def __init__(self,
       index_dir: str,
-      text_field: str = None,
-      stemmer: Optional[Union[PisaStemmer, str]] = None, #couldn't find it in the code but ChatGPT says pyserini supports stemming
-      #index_encoding: Optional[Union[PisaIndexEncoding, str]] = None,
-      batch_size: int = 100_000,
-      #stops: Optional[Union[PisaStopwords, List[str]]] = None,
+      append: bool = False, # "Append documents."
       threads: int = 8,
+      # args
+      generatorClass: str = "DefaultLuceneDocumentGenerator", # "Document generator class in package 'io.anserini.index.generator'."
+      fields: str = [] # "List of fields to index (space separated), in addition to the default 'contents' field."
+      storePositions: bool = False, # "Boolean switch to index store term positions; needed for phrase queries."
+      storeDocVectors: bool = False, # "Boolean switch to store document vectors; needed for (pseudo) relevance feedback."
+      storeContents: bool = False, # "Boolean switch to store document contents."
+      storeRaw: bool = False, # "Boolean switch to store raw source documents."
+      keepStopwords: bool = False # "Boolean switch to keep stopwords."
+      stopwords: str = "", # "Path to file with stopwords."
+      stemmer: str = "porter", # "Stemmer: one of the following {porter, krovetz, none}; defaults to 'porter'."
+      whitelist: str = None, # "File containing list of docids, one per line; only these docids will be indexed."
+      impact: bool = False, # "Boolean switch to store impacts (no norms)."
+      bm25.accurate: bool = False, # "Boolean switch to use AccurateBM25Similarity (computes accurate document lengths)."
+      language: str = "en", # "Analyzer language (ISO 3166 two-letter code)."
+      pretokenized: bool = False, # "index pre-tokenized collections without any additional stemming, stopword processing"
+      analyzeWithHuggingFaceTokenizer: str = ""; # "index a collection by tokenizing text with pretrained huggingface tokenizers"
+      useCompositeAnalyzer: bool = False, # "index a collection using a Lucene Analyzer & a pretrained HuggingFace tokenizer")
+      useAutoCompositeAnalyzer: bool = False # "index a collection using the AutoCompositeAnalyzer"
+      batch_size: int = 100_000, # allegedly Pyserini sypports batch indexing but idk
+
+      #Pyterrier stuff probably?
       #overwrite=False,
-      storePositions = False,
-      storeDocVectors = False,
-      storeRaw = False):
+      #text_field: str = None,
+      ):
     self.index_dir = index_dir
     ppath = Path(index_dir)
-    if stemmer is not None: stemmer = PisaStemmer(stemmer)
+    # before: Optional[Union[PisaStemmer, str]] = None
+    if stemmer is not None: stemmer = PisaStemmer(stemmer) # after: stemmer_from_name(stemmer)
+    #index_encoding: Optional[Union[PisaIndexEncoding, str]] = None, ?
     if index_encoding is not None: index_encoding = PisaIndexEncoding(index_encoding)
+    # before: stops: Optional[Union[PisaStopwords, List[str]]] = None,
     if stops is not None and not isinstance(stops, list): stops = PisaStopwords(stops)
     if (ppath/'ps_pisa_config.json').exists(): #TODO:write ps_pisa_config.json
       with (ppath/'ps_pisa_config.json').open('rt') as fin:
@@ -45,13 +64,32 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
     if stemmer is None: stemmer = PISA_INDEX_DEFAULTS['stemmer']
     if index_encoding is None: index_encoding = PISA_INDEX_DEFAULTS['index_encoding']
     if stops is None: stops = PISA_INDEX_DEFAULTS['stops']
-    self.text_field = text_field
     self.stemmer = stemmer
     self.index_encoding = index_encoding
     self.batch_size = batch_size
     self.threads = threads
+    #self.text_field = text_field
     #self.overwrite = overwrite
     self.stops = stops
+    self.generatorClass = generatorClass
+    self.fields = fields
+    self.storePositions = storePositions
+    self.storeDocVectors = storeDocVectors
+    self.storeContents = storeContents
+    self.storeRaw = storeRaw
+    self.keepStopwords = keepStopwords
+    self.stopwords = stopwords
+    self.stemmer = stemmer
+    self.whitelist = whitelist
+    self.impact = impact
+    self.bm25_accurate = bm25_accurate
+    self.language = language
+    self.pretokenized = pretokenized
+    self.analyzeWithHuggingFaceTokenizer = analyzeWithHuggingFaceTokenizer
+    self.useCompositeAnalyzer = useCompositeAnalyzer
+    self.useAutoCompositeAnalyzer = useAutoCompositeAnalyzer
+    self.batch_size = batch_size
+
 
   def built(self):
     return (Path(self.index_dir)/'ps_pisa_config.json').exists()
