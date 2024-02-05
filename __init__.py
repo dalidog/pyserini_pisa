@@ -1,4 +1,4 @@
-import pyserini as ps #idk if this works bc im on my local machine
+import pyserini as ps
 from pyserini.index import IndexWriter, SimpleIndexer
 from pyserini.search import SimpleSearcher
 import numpy as np
@@ -16,6 +16,77 @@ import functools
 import ir_datasets
 from . import _pisathon
 from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
+
+class PisaStemmer(Enum):
+  """
+  Represents a built-in stemming function from PISA
+  """
+  none = 'none'
+  porter2 = 'porter2'
+  krovetz = 'krovetz'
+
+
+class PisaScorer(Enum):
+  """
+  Represents a built-in scoring function from PISA
+  """
+  bm25 = 'bm25'
+  dph = 'dph'
+  pl2 = 'pl2'
+  qld = 'qld'
+  quantized = 'quantized'
+
+class PisaIndexEncoding(Enum):
+  """
+  Represents a built-in index encoding type from PISA.
+  """
+  ef = 'ef'
+  single = 'single'
+  pefuniform = 'pefuniform'
+  pefopt = 'pefopt'
+  block_optpfor = 'block_optpfor'
+  block_varintg8iu = 'block_varintg8iu'
+  block_streamvbyte = 'block_streamvbyte'
+  block_maskedvbyte = 'block_maskedvbyte'
+  block_interpolative = 'block_interpolative'
+  block_qmx = 'block_qmx'
+  block_varintgb = 'block_varintgb'
+  block_simple8b = 'block_simple8b'
+  block_simple16 = 'block_simple16'
+  block_simdbp = 'block_simdbp'
+
+
+class PisaQueryAlgorithm(Enum):
+  """
+  Represents a built-in query algorithm
+  """
+  wand = 'wand'
+  block_max_wand = 'block_max_wand'
+  block_max_maxscore = 'block_max_maxscore'
+  block_max_ranked_and = 'block_max_ranked_and'
+  ranked_and = 'ranked_and'
+  ranked_or = 'ranked_or'
+  maxscore = 'maxscore'
+
+
+class PisaStopwords(Enum):
+  """
+  Represents which set of stopwords to use during retrieval
+  """
+  terrier = 'terrier'
+  none = 'none'
+
+
+PISA_INDEX_DEFAULTS = {
+  'stemmer': PisaStemmer.porter2,
+  'index_encoding': PisaIndexEncoding.block_simdbp,
+  'query_algorithm': PisaQueryAlgorithm.block_max_wand,
+  'stops': PisaStopwords.terrier,
+}
+
+
+def log_level(on=True):
+  _pisathon.log_level(1 if on else 0)
 
 class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called and replace with ps.LuceneIndexer (equivalent)
   def __init__(self,
@@ -190,3 +261,29 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
     if PisaStemmer(self.stemmer) != PisaStemmer.none:
       raise ValueError("To index from dicts, you must set stemmer='none'")
     return PisaToksIndexer(self.index, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, scale=scale)
+
+class PisaRetrieve():
+  #TODO: merge with Palvi/Leyang
+
+#TODO: what is this?
+@functools.lru_cache()
+def _terrier_stops():
+  Stopwords = pt.autoclass('org.terrier.terms.Stopwords')
+  stops = list(Stopwords(None).stopWords)
+  return stops
+
+#TODO: change to Pyserini
+class DictTokeniser(pt.Transformer):
+  def __init__(self, field='text', stemmer=None):
+    super().__init__()
+    self.field = field
+    self.stemmer = stemmer or (lambda x: x)
+
+  def transform(self, inp):
+    from nltk import word_tokenize
+    return inp.assign(**{f'{self.field}_toks': inp[self.field].map(lambda x: dict(Counter(self.stemmer(t) for t in word_tokenize(x.lower()) if t.isalnum() )))})
+
+
+if __name__ == '__main__':
+  from . import cli
+  cli.main()
