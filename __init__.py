@@ -19,9 +19,20 @@ from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
 
 class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called and replace with ps.LuceneIndexer (equivalent)
   def __init__(self,
-      index_dir: str,
       append: bool = False, # "Append documents."
-      threads: int = 8,
+      threads: int = 4,
+      # abstract args
+      collectionClass: str, # "Collection class in io.anserini.collection."
+      input: str, # "Input collection."
+      index: str, # "Index path."
+      uniqueDocid: bool = False, # "Removes duplicate documents with the same docid during indexing."
+      optimize: bool = False, # "Optimizes index by merging into a single index segment."
+      memoryBuffer: int = 4096, # "Memory buffer size in MB."
+      verbose: bool = False, # "Enables verbose logging for each indexing thread."
+      quiet: bool = False, # "Turns off all logging."
+      options: bool = False, # "Print information about options."
+      shardCount: int = -1, # "Number of shards to partition the document collection into."
+      shardCurrent: int = -1, # "The current shard number to generate (indexed from 0)."
       # args
       generatorClass: str = "DefaultLuceneDocumentGenerator", # "Document generator class in package 'io.anserini.index.generator'."
       fields: str = [] # "List of fields to index (space separated), in addition to the default 'contents' field."
@@ -46,8 +57,8 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       #overwrite=False,
       #text_field: str = None,
       ):
-    self.index_dir = index_dir
-    ppath = Path(index_dir)
+    self.index = index
+    ppath = Path(index)
     # before: Optional[Union[PisaStemmer, str]] = None
     if stemmer is not None: stemmer = PisaStemmer(stemmer) # after: stemmer_from_name(stemmer)
     #index_encoding: Optional[Union[PisaIndexEncoding, str]] = None, ?
@@ -89,10 +100,21 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
     self.useCompositeAnalyzer = useCompositeAnalyzer
     self.useAutoCompositeAnalyzer = useAutoCompositeAnalyzer
     self.batch_size = batch_size
+    self.collectionClass = collectionClass
+    self.input = input
+    self.uniqueDocid = uniqueDocid
+    self.optimize = optimize
+    self.memoryBuffer = memoryBuffer
+    self.verbose = verbose
+    self.quiet = quiet
+    self.options = options
+    self.shardCount = shardCount
+    self.shardCurrent = shardCurrent
+
 
 
   def built(self):
-    return (Path(self.index_dir)/'ps_pisa_config.json').exists()
+    return (Path(self.index)/'ps_pisa_config.json').exists()
 
   def index(self, it):
     it = more_itertools.peekable(it)
@@ -147,7 +169,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
 
   def get_corpus_iter(self, field='toks', verbose=True):
     assert self.built()
-    ppath = Path(self.index_dir)
+    ppath = Path(self.index)
     assert (ppath/'fwd').exists(), "get_corpus_iter requires a fwd index"
     m = np.memmap(ppath/'fwd', mode='r', dtype=np.uint32)
     lexicon = [l.strip() for l in (ppath/'fwd.terms').open('rt')]
@@ -162,9 +184,9 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       idx = end
 
   def indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None):
-    return PisaIndexer(self.index_dir, text_field or self.text_field or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads)
+    return PisaIndexer(self.index, text_field or self.text_field or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads)
 
   def toks_indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None, scale=100.):
     if PisaStemmer(self.stemmer) != PisaStemmer.none:
       raise ValueError("To index from dicts, you must set stemmer='none'")
-    return PisaToksIndexer(self.index_dir, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, scale=scale)
+    return PisaToksIndexer(self.index, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, scale=scale)
