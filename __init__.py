@@ -22,7 +22,7 @@ class PisaStemmer(Enum):
   Represents a built-in stemming function from PISA
   """
   none = 'none'
-  porter2 = 'porter2'
+  porter2 = 'porter'
   krovetz = 'krovetz'
 
 

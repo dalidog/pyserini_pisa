@@ -48,9 +48,10 @@ def main_index(args):
   #dataset = pt.get_dataset(args.dataset)
   
   #converts JSON collection (Pyserini) to plaintext (PISA)
-  plaintext_collection = parse_json_collection_to_plaintext(args.collection,???) # where to pass plaintext collection, where to store it?
-  
-  index = PisaIndex(args.index_path, args.fields, threads=args.threads)
+  plaintext_path=os.path.join(os.path.dirname(args.collection), "out.txt")
+  plaintext_collection = parse_json_collection_to_plaintext(args.collection,plaintext_path) # where to pass plaintext collection, where to store it?
+  # modify args.fields to not include the input collection param?
+  index = PisaIndex(args.index_path, args.fields, input=plaintext_path, threads=args.threads)
 
   # Old way:
   # docs = dataset.get_corpus_iter(verbose=False)
