@@ -126,7 +126,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
 
       #Pyterrier stuff probably?
       #overwrite=False,
-      #text_field: str = None,
+      text_field: str = None # facilitates treatment of different parts of document text differently (ex: headings) ?
       ):
     self.index = index
     ppath = Path(index)
