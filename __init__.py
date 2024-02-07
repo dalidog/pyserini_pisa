@@ -126,7 +126,6 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
 
       #Pyterrier stuff probably?
       #overwrite=False,
-      text_field: str = None # facilitates treatment of different parts of document text differently (ex: headings) ?
       ):
     self.index = index
     ppath = Path(index)
@@ -150,7 +149,6 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
     self.index_encoding = index_encoding
     self.batch_size = batch_size
     self.threads = threads
-    #self.text_field = text_field
     #self.overwrite = overwrite
     self.stops = stops
     self.generatorClass = generatorClass
@@ -190,22 +188,22 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
   def index(self, it):
     it = more_itertools.peekable(it)
     first_doc = it.peek()
-    text_field = self.text_field
-    if text_field is None: # infer the text field
+    fields = self.fields
+    if fields is None: # infer the text field
       dict_field = [k for k, v in sorted(first_doc.items()) if k.endswith('toks') and isinstance(v, dict)]
       if dict_field:
-        text_field = dict_field[0]
-        warn(f'text_field not specified; using pre-tokenized field {repr(text_field)}')
+        fields = dict_field[0]
+        warn(f'fields not specified; using pre-tokenized field {repr(fields)}')
       else:
-        text_field = [k for k, v in sorted(first_doc.items()) if isinstance(v, str) and k != 'docno']
-        assert len(text_field) >= 1, f"no str or toks fields found in document. Fields: {k: type(v) for k, v in first_doc.items()}"
-        warn(f'text_field not specified; indexing all str fields: {text_field}')
+        fields = [k for k, v in sorted(first_doc.items()) if isinstance(v, str) and k != 'docno']
+        assert len(fields) >= 1, f"no str or toks fields found in document. Fields: {k: type(v) for k, v in first_doc.items()}"
+        warn(f'fields not specified; indexing all str fields: {fields}')
 
     mode = PisaIndexingMode.overwrite if self.overwrite else PisaIndexingMode.create
 
-    if isinstance(text_field, str) and isinstance(first_doc[text_field], dict):
-      return self.toks_indexer(text_field, mode=mode).index(it)
-    return self.indexer(text_field, mode=mode).index(it)
+    if isinstance(fields, str) and isinstance(first_doc[fields], dict):
+      return self.toks_indexer(fields, mode=mode).index(it)
+    return self.indexer(fields, mode=mode).index(it)
 
   def bm25(self, k1=0.9, b=0.4, num_results=1000, verbose=False, threads=None, query_algorithm=None, query_weighted=None, toks_scale=100.):
     return PisaRetrieve(self, scorer=PisaScorer.bm25, bm25_k1=k1, bm25_b=b, num_results=num_results, verbose=verbose, threads=threads or self.threads, stops=self.stops, query_algorithm=query_algorithm, query_weighted=query_weighted, toks_scale=toks_scale)
@@ -254,13 +252,13 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       yield {'docno': did.strip(), field: dict(Counter(lexicon[i] for i in m[start:end]))}
       idx = end
 
-  def indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None):
-    return PisaIndexer(self.index, text_field or self.text_field or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads)
+  def indexer(self, fields=None, mode=PisaIndexingMode.create, threads=None, batch_size=None):
+    return PisaIndexer(self.index, fields or self.fields or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads)
 
-  def toks_indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None, scale=100.):
+  def toks_indexer(self, fields=None, mode=PisaIndexingMode.create, threads=None, batch_size=None, scale=100.):
     if PisaStemmer(self.stemmer) != PisaStemmer.none:
       raise ValueError("To index from dicts, you must set stemmer='none'")
-    return PisaToksIndexer(self.index, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, scale=scale)
+    return PisaToksIndexer(self.index, fields or self.fields or 'toks', mode, threads=threads or self.threads, scale=scale)
 
 class PisaRetrieve():
   #TODO: merge with Palvi/Leyang
