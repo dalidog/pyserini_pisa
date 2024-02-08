@@ -1,4 +1,5 @@
 import json
+import os
 import argparse
 import sys
 import pyserini as ps
@@ -75,7 +76,7 @@ def main_index(args):
   
   #converts JSON collection (Pyserini) to plaintext (PISA)
   plaintext_path=os.path.join(os.path.dirname(args.collection), "out.txt")
-  plaintext_collection = parse_json_collection_to_plaintext(args.collection,plaintext_path) # where to pass plaintext collection, where to store it?
+  plaintext_collection = parse_json_collection_to_plaintext(args.collection, plaintext_path) # where to pass plaintext collection, where to store it?
   # modify args.fields to not include the input collection param?
   index = PisaIndex(args.index_path, args.fields, input=plaintext_path, threads=args.threads)
 
@@ -90,20 +91,74 @@ def main_index(args):
   # New way:
   index.index(plaintext_collection)
 
-def parse_json_collection_to_plaintext(file_path, out_file):
-  try:
-      with open(file_path, 'r') as file, , open(out_file, 'w') as outfile:
-        for line in file:
-            data = json.loads(line)
-            doc_id = data.get('id', '')
-            contents = data.get('contents', '')
-            outfile.write(f"{doc_id}   {contents}\n\n")
-  except FileNotFoundError:
-      print(f"File not found: {file_path}")
-      return None
-  except json.JSONDecodeError as e:
-      print(f"Error decoding JSON: {e}")
-      return None
+
+# folder with each JSON in its own file  
+def parse_json_folder(folder_path, output_file):
+    with open(output_file, 'w') as out_file:
+        for filename in os.listdir(folder_path):
+            filepath = os.path.join(folder_path, filename)
+            if os.path.isfile(filepath) and filepath.endswith('.json'):
+                try:
+                    with open(filepath, 'r') as file:
+                        data = json.load(file)
+                        out_file.write(f"{data['id']}   {data['contents']}\n")
+                except FileNotFoundError:
+                    print(f"File not found: {filepath}")
+                    return None
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    continue
+                
+# folder with files, each of which contains an array of JSON documents
+def parse_json_array_folder(folder_path, output_file):
+    with open(output_file, 'w') as out_file:
+        for filename in os.listdir(folder_path):
+            filepath = os.path.join(folder_path, filename)
+            if os.path.isfile(filepath) and filepath.endswith('.json'):
+                try:
+                    with open(filepath, 'r') as file:
+                        data_array = json.load(file)
+                        for data in data_array:
+                            out_file.write(f"{data['id']}   {data['contents']}\n")
+                except FileNotFoundError:
+                    print(f"File not found: {filepath}")
+                    return None
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    continue
+
+# folder with files, each of which contains a JSON on an individual line
+def parse_jsonl_folder(folder_path, output_file):
+    with open(output_file, 'w') as out_file:
+        for filename in os.listdir(folder_path):
+            filepath = os.path.join(folder_path, filename)
+            if os.path.isfile(filepath) and filepath.endswith('.jsonl'):
+                try:
+                    with open(filepath, 'r') as file:
+                        for line in file:
+                            data = json.loads(line)
+                            out_file.write(f"{data['id']}   {data['contents']}\n")
+                except FileNotFoundError:
+                    print(f"File not found: {filepath}")
+                    return None
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    continue
+
+# Example usage:
+folder_path = "path/to/json_folder"
+output_file = "output.txt"
+
+# Try each parsing method until one succeeds
+def parse_json_collection_to_plaintext(folder_path, output_file):
+  if not os.path.isdir(folder_path):
+        print(f"Folder not found: {folder_path}")
+        return False
+  
+  if not parse_json_folder(folder_path, output_file):
+      if not parse_json_array_folder(folder_path, output_file):
+          parse_jsonl_folder(folder_path, output_file)
+  return output_file
 
 
 def main_retrieve(args):
