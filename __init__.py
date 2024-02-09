@@ -18,6 +18,8 @@ from . import _pisathon
 from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
 
 from typing import List
+import pandas as pd
+from collections import Counter
 
 class PisaStemmer(Enum):
   """
@@ -283,17 +285,31 @@ def _pyserini_stops():
   stops = ps.scripts.ltr_msmarco.convert_common.read_stopwords(fileName='stopwords.txt', lower_case=True)
   return stops
 
-#TODO: change to Pyserini
-class DictTokeniser(pt.Transformer):
-  def __init__(self, fields='text', stemmer=None):
-    super().__init__()
-    self.fields = fields
-    self.stemmer = stemmer or (lambda x: x)
+# class DictTokeniser(pt.Transformer):
+#   def __init__(self, fields='text', stemmer=None):
+#     super().__init__()
+#     self.fields = fields
+#     self.stemmer = stemmer or (lambda x: x)
 
-  def transform(self, inp):
-    from nltk import word_tokenize
-    return inp.assign(**{f'{self.fields}_toks': inp[self.fields].map(lambda x: dict(Counter(self.stemmer(t) for t in word_tokenize(x.lower()) if t.isalnum() )))})
+#   def transform(self, inp):
+#     from nltk import word_tokenize
+#     return inp.assign(**{f'{self.fields}_toks': inp[self.fields].map(lambda x: dict(Counter(self.stemmer(t) for t in word_tokenize(x.lower()) if t.isalnum() )))})
 
+# Pyserini version from Chat-GPT, apparently no direct correlation to pt.Transformer class
+class DictTokeniser:
+    def __init__(self, fields='text', stemmer=None):
+        self.fields = fields
+        self.stemmer = stemmer or (lambda x: x)
+
+    def transform(self, inp):
+        tokenizer = ps.analysis.Analyzer("en")
+        tokenized_texts = {}
+        
+        for field in self.fields:
+            tokenized_texts[field + '_toks'] = inp[field].apply(
+                lambda x: dict(Counter(self.stemmer(t) for t in tokenizer.analyze(x))))
+        
+        return pd.concat([inp, pd.DataFrame(tokenized_texts)], axis=1)
 
 if __name__ == '__main__':
   from . import cli
