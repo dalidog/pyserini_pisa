@@ -1,5 +1,6 @@
 import json
 import argparse
+import os
 import sys
 import pyserini as ps
 from pyserini_pisa import PisaIndex, PisaRetrieve, PisaScorer, PisaStopwords, PISA_INDEX_DEFAULTS
@@ -59,24 +60,15 @@ def main():
   args = parser.parse_args()
   args.func(args)
 
-
-def main_index(args):
-  dataset = pt.get_dataset(args.dataset)
-  index = PisaIndex(args.index_path, args.fields, threads=args.threads, batch_size=args.batch_size)
-  docs = dataset.get_corpus_iter(verbose=False)
-  total = None
-  if hasattr(dataset, 'irds_ref'):
-    total = dataset.irds_ref().docs_count()
-  docs = pt.tqdm(docs, total=total, smoothing=0., desc='document feed', unit='doc')
-  index.index(docs)
-
 def main_index(args):
   #dataset = pt.get_dataset(args.dataset)
   
   #converts JSON collection (Pyserini) to plaintext (PISA)
-  plaintext_path=os.path.join(os.path.dirname(args.collection), "out.txt")
-  plaintext_collection = parse_json_collection_to_plaintext(args.collection,plaintext_path) # where to pass plaintext collection, where to store it?
-  # modify args.fields to not include the input collection param?
+  plaintext_path=os.path.join(args.collection, "out.txt")
+  for filename in os.listdir(args.collection):
+    if not (file_name.split('.')[-1].lower() == ".txt"):
+      parse_json_collection_to_plaintext(args.collection,plaintext_path)
+ # modify args.fields to not include the input collection param?
   index = PisaIndex(args.index_path, args.fields, input=plaintext_path, threads=args.threads)
 
   # Old way:
@@ -93,11 +85,27 @@ def main_index(args):
 def parse_json_collection_to_plaintext(file_path, out_file):
   try:
       with open(file_path, 'r') as file, , open(out_file, 'w') as outfile:
-        for line in file:
-            data = json.loads(line)
-            doc_id = data.get('id', '')
-            contents = data.get('contents', '')
+        # case where all in same file no array
+        if file_name.split('.')[-1].lower() == ".jsonl":
+          for line in file:
+              data = json.loads(line)
+              doc_id = data.get('id', '')
+              contents = data.get('contents', '')
+              outfile.write(f"{doc_id}   {contents}\n\n")
+        else
+          json_data = json.load(file)
+          # case where 1 file and array of objects
+          if isinstance(json_data, list):
+                for item in json_data:
+                  doc_id = item['id']
+                  contents = item['contents']
+                  outfile.write(f"{doc_id}   {contents}\n\n")
+          else:
+            # case where 1 file for each document
+            doc_id = json_data['id']
+            contents = json_data['contents']
             outfile.write(f"{doc_id}   {contents}\n\n")
+
   except FileNotFoundError:
       print(f"File not found: {file_path}")
       return None
