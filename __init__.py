@@ -17,6 +17,8 @@ import ir_datasets
 from . import _pisathon
 from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
 
+from typing import List
+
 class PisaStemmer(Enum):
   """
   Represents a built-in stemming function from PISA
@@ -73,7 +75,7 @@ class PisaStopwords(Enum):
   """
   Represents which set of stopwords to use during retrieval
   """
-  terrier = 'terrier'
+  pyserini = 'pyserini'
   none = 'none'
 
 
@@ -81,7 +83,7 @@ PISA_INDEX_DEFAULTS = {
   'stemmer': PisaStemmer.porter2,
   'index_encoding': PisaIndexEncoding.block_simdbp,
   'query_algorithm': PisaQueryAlgorithm.block_max_wand,
-  'stops': PisaStopwords.terrier,
+  'stops': PisaStopwords.pyserini,
 }
 
 
@@ -106,7 +108,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       shardCurrent: int = -1, # "The current shard number to generate (indexed from 0)."
       # args
       generatorClass: str = "DefaultLuceneDocumentGenerator", # "Document generator class in package 'io.anserini.index.generator'."
-      fields: str = [] # "List of fields to index (space separated), in addition to the default 'contents' field."
+      fields: Union[str, List[str]] = [] # "List of fields to index (space separated), in addition to the default 'contents' field."
       storePositions: bool = False, # "Boolean switch to index store term positions; needed for phrase queries."
       storeDocVectors: bool = False, # "Boolean switch to store document vectors; needed for (pseudo) relevance feedback."
       storeContents: bool = False, # "Boolean switch to store document contents."
@@ -119,7 +121,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       bm25.accurate: bool = False, # "Boolean switch to use AccurateBM25Similarity (computes accurate document lengths)."
       language: str = "en", # "Analyzer language (ISO 3166 two-letter code)."
       pretokenized: bool = False, # "index pre-tokenized collections without any additional stemming, stopword processing"
-      analyzeWithHuggingFaceTokenizer: str = ""; # "index a collection by tokenizing text with pretrained huggingface tokenizers"
+      analyzeWithHuggingFaceTokenizer: str = "", # "index a collection by tokenizing text with pretrained huggingface tokenizers"
       useCompositeAnalyzer: bool = False, # "index a collection using a Lucene Analyzer & a pretrained HuggingFace tokenizer")
       useAutoCompositeAnalyzer: bool = False # "index a collection using the AutoCompositeAnalyzer"
       batch_size: int = 100_000, # allegedly Pyserini sypports batch indexing but idk
@@ -135,7 +137,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
     if index_encoding is not None: index_encoding = PisaIndexEncoding(index_encoding)
     # before: stops: Optional[Union[PisaStopwords, List[str]]] = None,
     if stops is not None and not isinstance(stops, list): stops = PisaStopwords(stops)
-    if (ppath/'ps_pisa_config.json').exists(): #TODO:write ps_pisa_config.json
+    if (ppath/'ps_pisa_config.json').exists():
       with (ppath/'ps_pisa_config.json').open('rt') as fin:
         config = json.load(fin)
       if stemmer is None:
@@ -236,7 +238,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
 
 # deleted to_ciff, from_ciff, from_dataset
 
-  def get_corpus_iter(self, field='toks', verbose=True):
+  def get_corpus_iter(self, fields='toks', verbose=True):
     assert self.built()
     ppath = Path(self.index)
     assert (ppath/'fwd').exists(), "get_corpus_iter requires a fwd index"
@@ -263,23 +265,34 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
 class PisaRetrieve():
   #TODO: merge with Palvi/Leyang
 
-#TODO: what is this?
+def _stops_fname(self, d):
+    if self.stops == PisaStopwords.none:
+      return ''
+    else:
+      fifo = os.path.join(d, 'stops')
+      stops = self.stops
+      if stops == PisaStopwords.terrier:
+        stops = _pyserini_stops()
+      with open(fifo, 'wt') as fout:
+        for stop in stops:
+          fout.write(f'{stop}\n')
+      return fifo
+
 @functools.lru_cache()
-def _terrier_stops():
-  Stopwords = pt.autoclass('org.terrier.terms.Stopwords')
-  stops = list(Stopwords(None).stopWords)
+def _pyserini_stops():
+  stops = ps.scripts.ltr_msmarco.convert_common.read_stopwords(fileName='stopwords.txt', lower_case=True)
   return stops
 
 #TODO: change to Pyserini
 class DictTokeniser(pt.Transformer):
-  def __init__(self, field='text', stemmer=None):
+  def __init__(self, fields='text', stemmer=None):
     super().__init__()
-    self.field = field
+    self.fields = fields
     self.stemmer = stemmer or (lambda x: x)
 
   def transform(self, inp):
     from nltk import word_tokenize
-    return inp.assign(**{f'{self.field}_toks': inp[self.field].map(lambda x: dict(Counter(self.stemmer(t) for t in word_tokenize(x.lower()) if t.isalnum() )))})
+    return inp.assign(**{f'{self.fields}_toks': inp[self.fields].map(lambda x: dict(Counter(self.stemmer(t) for t in word_tokenize(x.lower()) if t.isalnum() )))})
 
 
 if __name__ == '__main__':
