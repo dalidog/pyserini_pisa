@@ -127,8 +127,6 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       useCompositeAnalyzer: bool = False, # "index a collection using a Lucene Analyzer & a pretrained HuggingFace tokenizer")
       useAutoCompositeAnalyzer: bool = False # "index a collection using the AutoCompositeAnalyzer"
       batch_size: int = 100_000, # allegedly Pyserini sypports batch indexing but idk
-
-      #Pyterrier stuff probably?
       #overwrite=False,
       ):
     self.index = index
