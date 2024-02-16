@@ -1,4 +1,5 @@
 import json
+import os
 import argparse
 import os
 import sys
@@ -64,11 +65,9 @@ def main_index(args):
   #dataset = pt.get_dataset(args.dataset)
   
   #converts JSON collection (Pyserini) to plaintext (PISA)
-  plaintext_path=os.path.join(args.collection, "out.txt")
-  for filename in os.listdir(args.collection):
-    if not (file_name.split('.')[-1].lower() == ".txt"):
-      parse_json_collection_to_plaintext(args.collection,plaintext_path)
- # modify args.fields to not include the input collection param?
+  plaintext_path=os.path.join(os.path.dirname(args.collection), "out.txt")
+  plaintext_collection = parse_json_collection_to_plaintext(args.collection, args.whitelist, plaintext_path) # where to pass plaintext collection, where to store it?
+  # modify args.fields to not include the input collection param?
   index = PisaIndex(args.index_path, args.fields, input=plaintext_path, threads=args.threads)
 
   # Old way:
@@ -82,37 +81,85 @@ def main_index(args):
   # New way:
   index.index(plaintext_collection)
 
-def parse_json_collection_to_plaintext(file_path, out_file):
-  try:
-      with open(file_path, 'r') as file, , open(out_file, 'w') as outfile:
-        # case where all in same file no array
-        if file_name.split('.')[-1].lower() == ".jsonl":
-          for line in file:
-              data = json.loads(line)
-              doc_id = data.get('id', '')
-              contents = data.get('contents', '')
-              outfile.write(f"{doc_id}   {contents}\n\n")
-        else
-          json_data = json.load(file)
-          # case where 1 file and array of objects
-          if isinstance(json_data, list):
-                for item in json_data:
-                  doc_id = item['id']
-                  contents = item['contents']
-                  outfile.write(f"{doc_id}   {contents}\n\n")
-          else:
-            # case where 1 file for each document
-            doc_id = json_data['id']
-            contents = json_data['contents']
-            outfile.write(f"{doc_id}   {contents}\n\n")
 
-  except FileNotFoundError:
-      print(f"File not found: {file_path}")
-      return None
-  except json.JSONDecodeError as e:
-      print(f"Error decoding JSON: {e}")
-      return None
+# folder with each JSON in its own file  
+def parse_json_folder(folder_path, whitelist_set, output_file):
+    with open(output_file, 'w') as out_file:
+        for filename in os.listdir(folder_path):
+            filepath = os.path.join(folder_path, filename)
+            if os.path.isfile(filepath) and filepath.endswith('.json'):
+                try:
+                    with open(filepath, 'r') as file:
+                        data = json.load(file)
+                        docid = data.get('id', '')
+                        contents = data.get('contents', '')
+                        if docid in whitelist_set:
+                            out_file.write(f"{docid}   {contents}\n")
+                except FileNotFoundError:
+                    print(f"File not found: {filepath}")
+                    return None
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    continue
+                
+# folder with files, each of which contains an array of JSON documents
+def parse_json_array_folder(folder_path, whitelist_set, output_file):
+    with open(output_file, 'w') as out_file:
+        for filename in os.listdir(folder_path):
+            filepath = os.path.join(folder_path, filename)
+            if os.path.isfile(filepath) and filepath.endswith('.json'):
+                try:
+                    with open(filepath, 'r') as file:
+                        data_array = json.load(file)
+                        for data in data_array:
+                            docid = data.get('id', '')
+                            contents = data.get('contents', '')
+                            if docid in whitelist_set:
+                                out_file.write(f"{docid}   {contents}\n")
+                except FileNotFoundError:
+                    print(f"File not found: {filepath}")
+                    return None
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    continue
 
+# folder with files, each of which contains a JSON on an individual line
+def parse_jsonl_folder(folder_path, whitelist_set, output_file):
+    with open(output_file, 'w') as out_file:
+        for filename in os.listdir(folder_path):
+            filepath = os.path.join(folder_path, filename)
+            if os.path.isfile(filepath) and filepath.endswith('.jsonl'):
+                try:
+                    with open(filepath, 'r') as file:
+                        for line in file:
+                            data = json.loads(line)
+                            docid = data.get('id', '')
+                            contents = data.get('contents', '')
+                            if docid in whitelist_set:
+                                out_file.write(f"{docid}   {contents}\n")
+                except FileNotFoundError:
+                    print(f"File not found: {filepath}")
+                    return None
+                except json.JSONDecodeError as e:
+                    print(f"Error decoding JSON: {e}")
+                    continue
+
+# Try each parsing method until one succeeds
+def parse_json_collection_to_plaintext(folder_path, whitelist_path, output_file):
+  if not os.path.isdir(folder_path):
+        print(f"Folder not found: {folder_path}")
+        return False
+  
+  with open(whitelist_path, 'r') as f:
+        whitelist_set = set(line.strip() for line in f)
+  
+  if not parse_json_folder(folder_path, whitelist_set, output_file):
+      if not parse_json_array_folder(folder_path, whitelist_set, output_file):
+          parse_jsonl_folder(folder_path, whitelist_set, output_file)
+  return output_file
+
+def whitelist_collection(collection_path, whitelist_path):
+    
 
 def main_retrieve(args):
   #TODO: merge with Palvi/Leyang
