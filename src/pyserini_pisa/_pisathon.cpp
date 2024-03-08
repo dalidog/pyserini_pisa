@@ -1,7 +1,6 @@
 // Python includes
 #include <Python.h>
 
-
 #include <boost/filesystem.hpp>
 
 

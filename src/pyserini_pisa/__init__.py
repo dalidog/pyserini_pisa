@@ -14,7 +14,8 @@ from enum import Enum
 from collections import Counter
 import functools
 import ir_datasets
-from . import _pisathon
+# from . import _pisathon
+from pyterrier_pisa import _pisathon
 from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
 
 from typing import List
@@ -94,52 +95,52 @@ def log_level(on=True):
 
 class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called and replace with ps.LuceneIndexer (equivalent)
   def __init__(self,
-      append: bool = False, # "Append documents."
-      threads: int = 4,
-      # abstract args
-      collectionClass: str, # "Collection class in io.anserini.collection."
-      input: str, # "Input collection."
-      index: str, # "Index path."
-      uniqueDocid: bool = False, # "Removes duplicate documents with the same docid during indexing."
-      optimize: bool = False, # "Optimizes index by merging into a single index segment."
-      memoryBuffer: int = 4096, # "Memory buffer size in MB."
-      verbose: bool = False, # "Enables verbose logging for each indexing thread."
-      quiet: bool = False, # "Turns off all logging."
-      options: bool = False, # "Print information about options."
-      shardCount: int = -1, # "Number of shards to partition the document collection into."
-      shardCurrent: int = -1, # "The current shard number to generate (indexed from 0)."
-      # args
-      generatorClass: str = "DefaultLuceneDocumentGenerator", # "Document generator class in package 'io.anserini.index.generator'."
-      fields: Union[str, List[str]] = [] # "List of fields to index (space separated), in addition to the default 'contents' field."
-      storePositions: bool = False, # "Boolean switch to index store term positions; needed for phrase queries."
-      storeDocVectors: bool = False, # "Boolean switch to store document vectors; needed for (pseudo) relevance feedback."
-      storeContents: bool = False, # "Boolean switch to store document contents."
-      storeRaw: bool = False, # "Boolean switch to store raw source documents."
-      keepStopwords: bool = False # "Boolean switch to keep stopwords."
-      stopwords: str = "", # "Path to file with stopwords."
-      stemmer: str = "porter", # "Stemmer: one of the following {porter, krovetz, none}; defaults to 'porter'."
-      whitelist: str = None, # "File containing list of docids, one per line; only these docids will be indexed."
-      impact: bool = False, # "Boolean switch to store impacts (no norms)."
-      bm25.accurate: bool = False, # "Boolean switch to use AccurateBM25Similarity (computes accurate document lengths)."
-      language: str = "en", # "Analyzer language (ISO 3166 two-letter code)."
-      pretokenized: bool = False, # "index pre-tokenized collections without any additional stemming, stopword processing"
-      analyzeWithHuggingFaceTokenizer: str = "", # "index a collection by tokenizing text with pretrained huggingface tokenizers"
-      useCompositeAnalyzer: bool = False, # "index a collection using a Lucene Analyzer & a pretrained HuggingFace tokenizer")
-      useAutoCompositeAnalyzer: bool = False # "index a collection using the AutoCompositeAnalyzer"
-      batch_size: int = 100_000, # allegedly Pyserini sypports batch indexing but idk
-      #overwrite=False,
-      ):
-    self.index = index
-    ppath = Path(index)
-    # before: Optional[Union[PisaStemmer, str]] = None
-    if stemmer is not None: stemmer = PisaStemmer(stemmer) # after: stemmer_from_name(stemmer)
-    #index_encoding: Optional[Union[PisaIndexEncoding, str]] = None, ?
-    if index_encoding is not None: index_encoding = PisaIndexEncoding(index_encoding)
-    # before: stops: Optional[Union[PisaStopwords, List[str]]] = None,
-    if stops is not None and not isinstance(stops, list): stops = PisaStopwords(stops)
-    if (ppath/'ps_pisa_config.json').exists():
-      with (ppath/'ps_pisa_config.json').open('rt') as fin:
-        config = json.load(fin)
+               append: bool = False, # "Append documents."
+               threads: int = 4,
+               # abstract args
+               collectionClass: str, # "Collection class in io.anserini.collection."
+               input: str, # "Input collection."
+               index: str, # "Index path."
+               uniqueDocid: bool = False, # "Removes duplicate documents with the same docid during indexing."
+               optimize: bool = False, # "Optimizes index by merging into a single index segment."
+               verbose: bool = False, # "Enables verbose logging for each indexing thread."
+               quiet: bool = False, # "Turns off all logging."
+               options: bool = False, # "Print information about options."
+               shardCount: int = -1, # "Number of shards to partition the document collection into."
+               shardCurrent: int = -1, # "The current shard number to generate (indexed from 0)."
+               # args
+               generatorClass: str = "DefaultLuceneDocumentGenerator", # "Document generator class in package 'io.anserini.index.generator'."
+               fields: Union[str, List[str]] = [] # "List of fields to index (space separated), in addition to the default 'contents' field."
+               storePositions: bool = False, # "Boolean switch to index store term positions; needed for phrase queries."
+               storeDocVectors: bool = False, # "Boolean switch to store document vectors; needed for (pseudo) relevance feedback."
+               storeContents: bool = False, # "Boolean switch to store document contents."
+               storeRaw: bool = False, # "Boolean switch to store raw source documents."
+               keepStopwords: bool = False # "Boolean switch to keep stopwords."
+               stopwords: str = "", # "Path to file with stopwords."
+               stemmer: str = "porter", # "Stemmer: one of the following {porter, krovetz, none}; defaults to 'porter'."
+               whitelist: str = None, # "File containing list of docids, one per line; only these docids will be indexed."
+               impact: bool = False, # "Boolean switch to store impacts (no norms)."
+               bm25.accurate: bool = False, # "Boolean switch to use AccurateBM25Similarity (computes accurate document lengths)."
+               language: str = "en", # "Analyzer language (ISO 3166 two-letter code)."
+               pretokenized: bool = False, # "index pre-tokenized collections without any additional stemming, stopword processing"
+               analyzeWithHuggingFaceTokenizer: str = "", # "index a collection by tokenizing text with pretrained huggingface tokenizers"
+               useCompositeAnalyzer: bool = False, # "index a collection using a Lucene Analyzer & a pretrained HuggingFace tokenizer")
+               useAutoCompositeAnalyzer: bool = False # "index a collection using the AutoCompositeAnalyzer"
+               batch_size: int = 100_000 # allegedly Pyserini sypports batch indexing but idk
+               #overwrite=False,
+               ):
+  
+  self.index = index
+  ppath = Path(index)
+  # before: Optional[Union[PisaStemmer, str]] = None
+  if stemmer is not None: stemmer = PisaStemmer(stemmer) # after: stemmer_from_name(stemmer)
+  #index_encoding: Optional[Union[PisaIndexEncoding, str]] = None, ?
+  if index_encoding is not None: index_encoding = PisaIndexEncoding(index_encoding)
+  # before: stops: Optional[Union[PisaStopwords, List[str]]] = None,
+  if stops is not None and not isinstance(stops, list): stops = PisaStopwords(stops)
+  if (ppath/'ps_pisa_config.json').exists():
+    with (ppath/'ps_pisa_config.json').open('rt') as fin:
+      config = json.load(fin)
       if stemmer is None:
         stemmer = PisaStemmer(config['stemmer'])
       if stemmer.value != config['stemmer']:
