@@ -11,16 +11,30 @@ from enum import Enum
 from collections import Counter
 import functools
 import ir_datasets
-from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
-from pyserini.search import LuceneSearcher,SimpleSearcher
-from pyserini.index.lucene import LuceneIndexer
-from pyserini.search.lucene import LuceneSearcher
+# from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
+from pyserini.search import LuceneSearcher
+# from pyserini.index.lucene import LuceneIndexer
+# from pyserini.search.lucene import LuceneSearcher
 from enum import Enum
 from collections import Counter
 import functools
 import ir_datasets
-import ctypes
-from . import _pisathon
+
+# will change later 
+from pyterrier_pisa import _pisathon
+
+# new added imports
+import numpy as np
+
+from pyserini.fusion import FusionMethod, reciprocal_rank_fusion
+from pyserini.index import Document, IndexReader
+from pyserini.pyclass import autoclass, JFloat, JArrayList, JHashMap
+from pyserini.search import JQuery, JQueryGenerator, JScoredDoc
+from pyserini.trectools import TrecRun
+from pyserini.util import download_prebuilt_index, get_sparse_indexes_info
+
+JScoredDoc = autoclass('io.anserini.search.ScoredDoc')
+
 
 
 class PisaStemmer(Enum):
@@ -89,7 +103,7 @@ PISA_INDEX_DEFAULTS = {
 }
 
 
-class PisaIndex(LuceneIndexer): # find all places where pt.Indexer is called and replace with ps.LuceneIndexer (equivalent)
+class PisaIndex(): # find all places where pt.Indexer is called and replace with ps.LuceneIndexer (equivalent)
   def __init__ (self,
       index_dir: str,
       append: bool = False, # "Append documents."
@@ -106,7 +120,7 @@ class PisaIndex(LuceneIndexer): # find all places where pt.Indexer is called and
       stemmer: str = "porter", # "Stemmer: one of the following {porter, krovetz, none}; defaults to 'porter'."
       whitelist: str = None, # "File containing list of docids, one per line; only these docids will be indexed."
       impact: bool = False, # "Boolean switch to store impacts (no norms)."
-      # bm25.accurate: bool = False, # "Boolean switch to use AccurateBM25Similarity (computes accurate document lengths)."
+      bm25_accurate: bool = False, # "Boolean switch to use AccurateBM25Similarity (computes accurate document lengths)."
       language: str = "en", # "Analyzer language (ISO 3166 two-letter code)."
       pretokenized: bool = False, # "index pre-tokenized collections without any additional stemming, stopword processing"
       analyzeWithHuggingFaceTokenizer: str = "", # "index a collection by tokenizing text with pretrained huggingface tokenizers"
@@ -228,21 +242,30 @@ class PisaIndex(LuceneIndexer): # find all places where pt.Indexer is called and
       yield {'docno': did.strip(), field: dict(Counter(lexicon[i] for i in m[start:end]))}
       idx = end
 
-  def indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None):
-    return PisaIndexer(self.index_dir, text_field or self.text_field or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads)
+  # def indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None):
+  #   return PisaIndexer(self.index_dir, text_field or self.text_field or 'text', mode, stemmer=self.stemmer, threads=threads or self.threads)
 
-  def toks_indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None, scale=100.):
-    if PisaStemmer(self.stemmer) != PisaStemmer.none:
-      raise ValueError("To index from dicts, you must set stemmer='none'")
-    return PisaToksIndexer(self.index_dir, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, scale=scale)
+  # def toks_indexer(self, text_field=None, mode=PisaIndexingMode.create, threads=None, batch_size=None, scale=100.):
+  #   if PisaStemmer(self.stemmer) != PisaStemmer.none:
+  #     raise ValueError("To index from dicts, you must set stemmer='none'")
+  #   return PisaToksIndexer(self.index_dir, text_field or self.text_field or 'toks', mode, threads=threads or self.threads, scale=scale)
   
 
-class PisaRetrieve(LuceneSearcher):
-  # scorer: Union[PisaScorer, str],
+class PisaRetrieve2(LuceneSearcher):
+    # step1: 
+    # we are getting a pisa index which is already built and use this pisa index (using pisa cli)
+    # step2: 
+    # search the Pisaindex with Pyserini 
+    # step3:
+    # run another pipeline: using pyserini to generate all the results
+    # step4: 
+    # comparing the two results (probably iterate through them)
+    # step5:
+    # unit-test, save them as .py files? 
   def __init__(
     self, 
     index: Union[PisaIndex, str], 
-    scorer = None, 
+    scorer: Union[PisaScorer, str] = None, 
     num_results: int = 1000, 
     threads=None, 
     verbose=False, 
@@ -272,4 +295,128 @@ class PisaRetrieve(LuceneSearcher):
     else:
       self.query_weighted = query_weighted
     self.toks_scale = toks_scale
-    # _pisathon.prepare_index(self.index.path, encoding=self.index.index_encoding.value, scorer_name=self.scorer.value, **retr_args)
+    _pisathon.prepare_index(self.index.path, encoding=self.index.index_encoding.value, scorer_name=self.scorer.value, **retr_args)
+
+
+  def search(self, q: Union[str, JQuery], k: int = 10, query_generator: JQueryGenerator = None, # type: ignore
+               fields=dict(), strip_segment_id=False, remove_dups=False) -> List[JScoredDoc]: # type: ignore
+        """Search the collection.
+
+        Parameters
+        ----------
+        q : Union[str, JQuery]
+            Query string or the ``JQuery`` objected.
+        k : int
+            Number of hits to return.
+        query_generator : JQueryGenerator
+            Generator to build queries. Set to ``None`` by default to use Anserini default.
+        fields : dict
+            Optional map of fields to search with associated boosts.
+        strip_segment_id : bool
+            Remove the .XXXXX suffix used to denote different segments from an document.
+        remove_dups : bool
+            Remove duplicate docids when writing final run output.
+
+        Returns
+        -------
+        List[JLuceneSearcherResult]
+            List of search results.
+        """
+
+        jfields = JHashMap()
+        for (field, boost) in fields.items():
+            jfields.put(field, JFloat(boost))
+
+        
+        # the funciton to translate Query string in JQuery form to 
+        hits = None
+
+        if query_generator:
+            if not fields:
+                hits = self.object.search(query_generator, q, k)
+            else:
+                hits = self.object.searchFields(query_generator, q, jfields, k)
+        elif isinstance(q, JQuery):
+            # Note that RM3 requires the notion of a query (string) to estimate the appropriate models. If we're just
+            # given a Lucene query, it's unclear what the "query" is for this estimation. One possibility is to extract
+            # all the query terms from the Lucene query, although this might yield unexpected behavior from the user's
+            # perspective. Until we think through what exactly is the "right thing to do", we'll raise an exception
+            # here explicitly.
+            if self.is_using_rm3():
+                raise NotImplementedError('RM3 incompatible with search using a Lucene query.')
+            if fields:
+                raise NotImplementedError('Cannot specify fields to search when using a Lucene query.')
+            hits = self.object.search(q, k)
+        else:
+            if not fields:
+                hits = self.object.search(q, k)
+            else:
+                hits = self.object.search_fields(q, jfields, k)
+
+      
+        
+        assert 'qid' in q.columns
+        assert 'query' in q.columns or 'query_toks' in q.columns
+        inp = []
+        if 'query_toks' in q.columns:
+          pretok = True
+        for i, toks_dict in enumerate(q['query_toks']):
+          if not isinstance(toks_dict, dict):
+            raise TypeError("query_toks column should be a dictionary (qid %s)" % qid)
+          toks_dict = {str(m): float(v * self.toks_scale) for m, v in toks_dict.items()} # force keys and str, vals as float, apply toks_scale
+          inp.append((i, toks_dict))
+        else:
+          pretok = False
+          inp.extend(enumerate(q['query']))
+
+        # if self.verbose:
+        #   inp = pt.tqdm(inp, unit='query', desc=f'PISA {self.scorer.value}')
+        with tempfile.TemporaryDirectory() as d:
+          shape = (len(q) * self.num_results,)
+          result_qidxs = np.ascontiguousarray(np.empty(shape, dtype=np.int32))
+          result_docnos = np.ascontiguousarray(np.empty(shape, dtype=object))
+          result_ranks = np.ascontiguousarray(np.empty(shape, dtype=np.int32))
+          result_scores = np.ascontiguousarray(np.empty(shape, dtype=np.float32))
+          size = _pisathon.retrieve(
+            self.index.path,
+            self.index.index_encoding.value,
+            self.query_algorithm.value,
+            self.scorer.value,
+            '' if self.index.stemmer == PisaStemmer.none else self.index.stemmer.value,
+            inp,
+            k=self.num_results,
+            threads=self.threads,
+            stop_fname=self._stops_fname(d),
+            query_weighted=1 if self.query_weighted else 0,
+            pretokenised=pretok,
+            result_qidxs=result_qidxs,
+            result_docnos=result_docnos,
+            result_ranks=result_ranks,
+            result_scores=result_scores,
+            **self.retr_args)
+        result = q.iloc[result_qidxs[:size]].reset_index(drop=True)
+        result['docno'] = result_docnos[:size]
+        result['score'] = result_scores[:size]
+        result['rank'] = result_ranks[:size]
+
+
+        # move the result from result[] to filter_hits and return filtered_hits 
+
+        docids = set()
+        filtered_hits = result
+
+        for hit in result:
+            if strip_segment_id is True:
+                result.docid = result.docid.split('.')[0]
+
+            if result.docid in docids:
+                continue
+
+            filtered_hits.append(hit)
+
+            if remove_dups is True:
+                docids.add(result.docid)
+
+
+        return filtered_hits
+            
