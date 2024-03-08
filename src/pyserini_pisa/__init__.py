@@ -14,13 +14,17 @@ from enum import Enum
 from collections import Counter
 import functools
 import ir_datasets
+# old way: fix this!!
 # from . import _pisathon
+# temporary fix:
 from pyterrier_pisa import _pisathon
 from .indexers import PisaIndexer, PisaToksIndexer, PisaIndexingMode
 
 from typing import List
 import pandas as pd
 from collections import Counter
+
+_logger = ir_datasets.log.easy()
 
 class PisaStemmer(Enum):
   """
@@ -127,7 +131,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
                analyzeWithHuggingFaceTokenizer: str = "", # "index a collection by tokenizing text with pretrained huggingface tokenizers"
                useCompositeAnalyzer: bool = False, # "index a collection using a Lucene Analyzer & a pretrained HuggingFace tokenizer")
                useAutoCompositeAnalyzer: bool = False, # "index a collection using the AutoCompositeAnalyzer"
-               batch_size: int = 100_000git  # allegedly Pyserini sypports batch indexing but idk
+               batch_size: int = 100_000 # allegedly Pyserini sypports batch indexing but idk
                #overwrite=False
                ): 
     self.index = index
@@ -183,8 +187,6 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
     self.shardCount = shardCount
     self.shardCurrent = shardCurrent
 
-
-
   def built(self):
     return (Path(self.index)/'ps_pisa_config.json').exists()
 
@@ -239,7 +241,7 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
 
 # deleted to_ciff, from_ciff, from_dataset
 
-  def get_corpus_iter(self, fields='toks', verbose=True):
+  def get_corpus_iter(self, field='toks', verbose=True):
     assert self.built()
     ppath = Path(self.index)
     assert (ppath/'fwd').exists(), "get_corpus_iter requires a fwd index"
@@ -263,10 +265,9 @@ class PisaIndex(ps.LuceneIndexer): # find all places where pt.Indexer is called 
       raise ValueError("To index from dicts, you must set stemmer='none'")
     return PisaToksIndexer(self.index, fields or self.fields or 'toks', mode, threads=threads or self.threads, scale=scale)
 
+#TODO: merge with Palvi/Leyang
 class PisaRetrieve():
-  #TODO: merge with Palvi/Leyang
-
-def _stops_fname(self, d):
+  def _stops_fname(self, d):
     if self.stops == PisaStopwords.none:
       return ''
     else:
